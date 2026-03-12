@@ -1,6 +1,6 @@
 #include "SensorTCRT5000.h"
 
-const int TCRT5000_PIN = D1;
+const int TCRT5000_PIN = 4;
 SensorTCRT5000 sensor(TCRT5000_PIN);
 
 void setup() {

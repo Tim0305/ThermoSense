@@ -1,4 +1,4 @@
-const int BUZZER_PIN = D5;
+const int BUZZER_PIN = 32;
 const int hz = 1000;
 
 void setup() {

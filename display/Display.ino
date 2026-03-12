@@ -3,8 +3,8 @@
 #include "images.h"
 
 // Integrated OLED Display
-const int OLED_SCL = 12;  // D5
-const int OLED_SDA = 14;  // D6
+const int OLED_SCL = 22;  // D5
+const int OLED_SDA = 21;  // D6
 const int OLED_ADDRESS = 0x3C;
 const int OLED_WIDTH = 128;
 const int OLED_HEIGHT = 64;
@@ -24,8 +24,7 @@ void setup() {
   // Display
   display.init();
   display.flipScreenVertically();
-  display.clear();
-  
+  display.clear(); 
 }
 
 void loop() {

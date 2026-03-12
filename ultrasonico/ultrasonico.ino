@@ -1,7 +1,7 @@
 #include "SensorUltrasonico.h"
 
-const int ULTRASONIC_TRIGGER = D6;
-const int ULTRASONIC_ECHO = D7;
+const int ULTRASONIC_TRIGGER = 19;
+const int ULTRASONIC_ECHO = 33;
 SensorUltrasonico ultrasonicSensor(ULTRASONIC_TRIGGER, ULTRASONIC_ECHO);
 
 void setup() {
