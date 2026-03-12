@@ -399,7 +399,7 @@ String getHTML() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <title>Smart Bottle</title>
+  <title>ThermoSense</title>
 
   <style>
 
@@ -499,7 +499,7 @@ String getHTML() {
   <body>
 
   <div class="header">
-  Smart Bottle Dashboard
+  ThermoSense Dashboard
   </div>
 
   <div class="container">
@@ -535,7 +535,7 @@ String getHTML() {
   </div>
 
   <div class="footer">
-  ESP32 Smart Bottle
+  ESP32 ThermoSense
   </div>
 
   <script>
