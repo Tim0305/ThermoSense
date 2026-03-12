@@ -11,6 +11,8 @@
 #include <ESP32Servo.h>
 #include <FastLED.h>
 #include <TinyGPSPlus.h>
+#include <WiFi.h>
+#include <WebServer.h>
 
 #define I2CDEV_IMPLEMENTATION I2CDEV_ARDUINO_WIRE
 
@@ -18,6 +20,8 @@ const int MAX_TEMPERATURE = 30; // C
 const int MIN_TEMPERATURE = 0; // C
 const int MAX_LEVEL = 100; // %
 const int MIN_LEVEL = 0; // %
+const int MAX_LEVEL_CM = 15;
+const int MIN_LEVEL_CM = 2;
 const int ALERT_MAX_TEMPERATURE = 28; // C
 const int ALERT_MAX_LEVEL = 90; // %
 
@@ -28,6 +32,12 @@ int level;
 // Flags
 bool FULL = false;
 bool HOT = false;
+bool OPENNED = false;
+
+// Web Server
+const char* SSID = "Megacable_2.4G_31F0";
+const char* PASSWORD = "UbPCMCKb";
+WebServer server(80);
 
 // OLED delay
 const long OLED_ON_TIME_DURATION = 3000;
@@ -89,6 +99,10 @@ const int OUT_PIN = 27;
 void showInfo();
 void drawBottle(int percentage);
 void turnLedsOff();
+void displayLocationInfo();
+void handleRoot();
+void handleData();
+String getHtml();
 
 void setup() {
   Serial.begin(9600);
@@ -104,7 +118,7 @@ void setup() {
   
   // Display
   display.init();
-  display.flipScreenVertically();
+  //display.flipScreenVertically();
   display.clear();
   Serial.println("Display ready");
 
@@ -125,11 +139,42 @@ void setup() {
   Serial.println("Leds ready");
 
   // GPS
-  GPS_SERIAL.begin(9600);
+  GPS_SERIAL.begin(9600, SERIAL_8N1, 16, 17);
   Serial.println("Waiting for GPS fix and satellites...");
+
+  // Leds
+  turnLedsOff();
+  Serial.println("Leds ready");
+
+  // Web Server
+  WiFi.begin(SSID, PASSWORD);
+  Serial.print("Connecting to WiFi");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println();
+  Serial.print("Connected! IP address: ");
+  Serial.println(WiFi.localIP());
+
+  server.on("/", handleRoot);
+  server.on("/data", handleData);
+  server.begin();
+
+  Serial.println("Web server started");
 }
 
 void loop() {
+  // Web Server
+  server.handleClient();
+
+  // GPS
+  while (GPS_SERIAL.available()) {
+    gps.encode(GPS_SERIAL.read());
+  }
+
   // get temperature
   temperatureSensor.requestTemperatures();
   temperature = temperatureSensor.getTempCByIndex(0);
@@ -144,7 +189,7 @@ void loop() {
 
   // get level
   long cm = sensorHCSR04.getDistanciaCM();
-  level = map(cm, 10, 2, 0, 100);
+  level = constrain(map(cm, MAX_LEVEL_CM, MIN_LEVEL_CM, 0, 100), 0, 100); // 0 -> 100 %
 
   if (level >= ALERT_MAX_LEVEL) {
     FULL = true;
@@ -168,6 +213,7 @@ void loop() {
   }
 
   if (displayOn) {
+    OPENNED = true;
     servo.write(0);
     currentTime = millis();
     if (currentTime - prevTime >= OLED_ON_TIME_DURATION) {
@@ -179,10 +225,13 @@ void loop() {
       showInfo();
   }
 
-  if (ax_ms2 > abs(3) || ay_ms2 > abs(3) || az_ms2 < 8 || az_ms2 > 12)
-    servo.write(90);
+  if (abs(ax_ms2) > 3 || abs(ay_ms2) > 3 || abs(az_ms2) < 8 || abs(az_ms2) > 12) {
+    // close
+     servo.write(90);
+     OPENNED = false;
+  }
 
-  if (digitalRead(OUT_PIN))
+  if (digitalRead(OUT_PIN) && OPENNED)
     buzzer.on();
   else
     buzzer.off();
@@ -268,3 +317,274 @@ void turnLedsOff() {
   leds[4] = CRGB::Black;
   FastLED.show();
 }
+
+void displayLocationInfo() {
+  Serial.println(F("-------------------------------------"));
+  Serial.println("\n Location Info:");
+
+  Serial.print("Latitude:  ");
+  Serial.print(gps.location.lat(), 6);
+  Serial.print(" ");
+  Serial.println(gps.location.rawLat().negative ? "S" : "N");
+
+  Serial.print("Longitude: ");
+  Serial.print(gps.location.lng(), 6);
+  Serial.print(" ");
+  Serial.println(gps.location.rawLng().negative ? "W" : "E");
+
+  Serial.print("Fix Quality: ");
+  Serial.println(gps.location.isValid() ? "Valid" : "Invalid");
+
+  Serial.print("Satellites: ");
+  Serial.println(gps.satellites.value());
+
+  Serial.print("Altitude:   ");
+  Serial.print(gps.altitude.meters());
+  Serial.println(" m");
+
+  Serial.print("Speed:      ");
+  Serial.print(gps.speed.kmph());
+  Serial.println(" km/h");
+
+  Serial.print("Course:     ");
+  Serial.print(gps.course.deg());
+  Serial.println("°");
+
+  Serial.print("Date:       ");
+  if (gps.date.isValid()) {
+    Serial.printf("%02d/%02d/%04d\n", gps.date.day(), gps.date.month(), gps.date.year());
+  } else {
+    Serial.println("Invalid");
+  }
+
+  Serial.print("Time (UTC): ");
+  if (gps.time.isValid()) {
+    Serial.printf("%02d:%02d:%02d\n", gps.time.hour(), gps.time.minute(), gps.time.second());
+  } else {
+    Serial.println("Invalid");
+  }
+
+  Serial.println(F("-------------------------------------"));
+}
+
+// Web server
+void handleRoot() {
+  server.send(200, "text/html", getHTML());
+}
+
+void handleData() {
+  String json = "{";
+  json += "\"temperature\":" + String(temperature) + ",";
+  json += "\"level\":" + String(level) + ",";
+
+  if (gps.location.isValid()) {
+    json += "\"lat\":" + String(gps.location.lat(),6) + ",";
+    json += "\"lng\":" + String(gps.location.lng(),6);
+  } else {
+    json += "\"lat\":0,\"lng\":0";
+  }
+
+  json += "}";
+
+  server.send(200, "application/json", json);
+}
+
+String getHTML() {
+  String html = R"rawliteral(
+  <!DOCTYPE html>
+  <html lang="es">
+
+  <head>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Smart Bottle</title>
+
+  <style>
+
+  body{
+  margin:0;
+  font-family: 'Segoe UI', Arial;
+  background:linear-gradient(135deg,#0f172a,#1e293b);
+  color:white;
+  text-align:center;
+  }
+
+  .header{
+  padding:30px;
+  font-size:28px;
+  font-weight:bold;
+  }
+
+  .container{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:25px;
+  padding:20px;
+  }
+
+  .card{
+  background:#1e293b;
+  padding:25px;
+  border-radius:16px;
+  width:260px;
+  box-shadow:0 10px 25px rgba(0,0,0,0.4);
+  transition:transform 0.2s;
+  }
+
+  .card:hover{
+  transform:translateY(-5px);
+  }
+
+  .title{
+  font-size:18px;
+  opacity:0.8;
+  }
+
+  .value{
+  font-size:42px;
+  font-weight:bold;
+  margin-top:10px;
+  }
+
+  .bar{
+  width:100%;
+  height:18px;
+  background:#334155;
+  border-radius:10px;
+  overflow:hidden;
+  margin-top:15px;
+  }
+
+  .fill{
+  height:100%;
+  background:linear-gradient(90deg,#22c55e,#4ade80);
+  width:0%;
+  transition:width 0.5s;
+  }
+
+  .gps{
+  font-size:15px;
+  margin-top:10px;
+  }
+
+  button{
+  margin-top:15px;
+  padding:10px 18px;
+  border:none;
+  border-radius:10px;
+  background:#3b82f6;
+  color:white;
+  font-size:15px;
+  cursor:pointer;
+  transition:background 0.2s;
+  }
+
+  button:hover{
+  background:#2563eb;
+  }
+
+  .footer{
+  margin-top:30px;
+  opacity:0.5;
+  font-size:14px;
+  }
+
+  </style>
+
+  </head>
+
+  <body>
+
+  <div class="header">
+  Smart Bottle Dashboard
+  </div>
+
+  <div class="container">
+
+  <div class="card">
+  <div class="title">🌡 Temperatura</div>
+  <div class="value" id="temp">-- °C</div>
+  </div>
+
+  <div class="card">
+  <div class="title">💧 Nivel de Agua</div>
+  <div class="value" id="level">-- %</div>
+
+  <div class="bar">
+  <div class="fill" id="levelbar"></div>
+  </div>
+
+  </div>
+
+  <div class="card">
+  <div class="title">📍 Ubicación GPS</div>
+
+  <div class="gps" id="gps">
+  Buscando señal...
+  </div>
+
+  <a id="map" target="_blank">
+  <button>Ver en Google Maps</button>
+  </a>
+
+  </div>
+
+  </div>
+
+  <div class="footer">
+  ESP32 Smart Bottle
+  </div>
+
+  <script>
+
+  function updateData(){
+
+  fetch("/data")
+  .then(response => response.json())
+  .then(data => {
+
+  document.getElementById("temp").innerHTML =
+  data.temperature.toFixed(1) + " °C";
+
+  document.getElementById("level").innerHTML =
+  data.level + " %";
+
+  document.getElementById("levelbar").style.width =
+  data.level + "%";
+
+  if(data.lat != 0){
+
+  document.getElementById("gps").innerHTML =
+  "Lat: " + data.lat + "<br>Lng: " + data.lng;
+
+  document.getElementById("map").href =
+  "https://maps.google.com/?q="+data.lat+","+data.lng;
+
+  }else{
+
+  document.getElementById("gps").innerHTML =
+  "Sin señal GPS";
+
+  }
+
+  });
+
+  }
+
+  setInterval(updateData,1000);
+
+  updateData();
+
+  </script>
+
+  </body>
+  </html>
+  )rawliteral";
+
+  return html;
+}
+
+
