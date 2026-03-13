@@ -35,8 +35,8 @@ bool HOT = false;
 bool OPENNED = false;
 
 // Web Server
-const char* SSID = "Megacable_2.4G_31F0";
-const char* PASSWORD = "UbPCMCKb";
+const char* SSID = "Prueba";
+const char* PASSWORD = "Prueba123";
 WebServer server(80);
 
 // OLED delay
@@ -268,24 +268,38 @@ void showInfo() {
   display.display();
 
   // Leds
-  if (level >= 70) {
+  if (level >= 90) {
     leds[0] = CRGB::Green;
     leds[1] = CRGB::Green;
     leds[2] = CRGB::Yellow;
     leds[3] = CRGB::Red;
     leds[4] = CRGB::Red;
-  } else if (level >= 40) {
+  } else if (level >= 70) {
+    leds[0] = CRGB::Black;
+    leds[1] = CRGB::Green;
+    leds[2] = CRGB::Yellow;
+    leds[3] = CRGB::Red;
+    leds[4] = CRGB::Red;
+  }
+  else if (level >= 50) {
     leds[0] = CRGB::Black;
     leds[1] = CRGB::Black;
     leds[2] = CRGB::Yellow;
     leds[3] = CRGB::Red;
     leds[4] = CRGB::Red;
   }
-  else if (level >= 5) {
+  else if (level >= 30) {
     leds[0] = CRGB::Black;
     leds[1] = CRGB::Black;
     leds[2] = CRGB::Black;
     leds[3] = CRGB::Red;
+    leds[4] = CRGB::Red;
+  }
+  else if (level >= 10) {
+    leds[0] = CRGB::Black;
+    leds[1] = CRGB::Black;
+    leds[2] = CRGB::Black;
+    leds[3] = CRGB::Black;
     leds[4] = CRGB::Red;
   }
   else {
